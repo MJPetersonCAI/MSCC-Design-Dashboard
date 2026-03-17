@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MS C&C Design Dashboard</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { margin: 0; background: #0f172a; }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+    const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+            ResponsiveContainer, Line, ComposedChart } = Recharts;
+
+
+const SFX_C="#0891b2", WOMS_C="#e11d48", YEL="#facc15";
+const BG="#0f172a", CARD="#1e293b", BORD="#334155", TEXT="#f1f5f9", MUTED="#64748b";
+const MONTHS_ORDER=["Oct 25","Nov 25","Dec 25","Jan 26","Feb 26","Mar 26*"];
+const MO_COLORS={"Oct 25":"#64748b","Nov 25":"#0891b2","Dec 25":"#7c3aed","Jan 26":"#059669","Feb 26":"#d97706","Mar 26*":"#e11d48"};
+
+// Business days per month × 8 hours = capacity
+// Oct:23 Nov:20 Dec:22 Jan:21 Feb:19 Mar(through Mar 16):11
+const BIZ_DAYS={"Oct 25":23,"Nov 25":20,"Dec 25":22,"Jan 26":21,"Feb 26":19,"Mar 26*":11};
+
+const MONTHLY=[
+  {m:"Oct 25",sfxT:2668,sfxA:30740,sfxMin:75422,sfxRw:609,womsT:114,womsA:1034,womsMin:3291,womsRw:28},
+  {m:"Nov 25",sfxT:2629,sfxA:29314,sfxMin:71858,sfxRw:679,womsT:416,womsA:6035,womsMin:12541,womsRw:138},
+  {m:"Dec 25",sfxT:1942,sfxA:21013,sfxMin:53097,sfxRw:425,womsT:608,womsA:8077,womsMin:18007,womsRw:218},
+  {m:"Jan 26",sfxT:1787,sfxA:19253,sfxMin:50560,sfxRw:374,womsT:720,womsA:10414,womsMin:21290,womsRw:252},
+  {m:"Feb 26",sfxT:540,sfxA:5967,sfxMin:12939,sfxRw:126,womsT:1928,womsA:23470,womsMin:57518,womsRw:687},
+  {m:"Mar 26*",sfxT:279,sfxA:3530,sfxMin:7166,sfxRw:74,womsT:1340,womsA:18906,womsMin:41881,womsRw:452},
+].map(r=>({...r,
+  totT:r.sfxT+r.womsT,totA:r.sfxA+r.womsA,
+  sfxH:Math.round(r.sfxMin/60),womsH:Math.round(r.womsMin/60),
+  totH:Math.round((r.sfxMin+r.womsMin)/60),
+  totMin:r.sfxMin+r.womsMin,totRw:r.sfxRw+r.womsRw,
+  rwPct:+((( r.sfxRw+r.womsRw)/(r.sfxT+r.womsT))*100).toFixed(1),
+  sfxRwPct:+((r.sfxRw/r.sfxT)*100).toFixed(1),
+  womsRwPct:+((r.womsRw/r.womsT)*100).toFixed(1),
+  wPct:Math.round((r.womsA/(r.sfxA+r.womsA))*100)
+}));
+
+const WOMS_D10={"Oct 25":[{d:1,dt:"Oct 2",t:6,a:147,min:228},{d:2,dt:"Oct 3",t:4,a:68,min:133},{d:3,dt:"Oct 7",t:1,a:1,min:10},{d:4,dt:"Oct 8",t:2,a:24,min:63},{d:5,dt:"Oct 9",t:2,a:6,min:28},{d:6,dt:"Oct 13",t:3,a:26,min:85},{d:7,dt:"Oct 14",t:4,a:19,min:65},{d:8,dt:"Oct 15",t:11,a:127,min:248},{d:9,dt:"Oct 16",t:9,a:105,min:183},{d:10,dt:"Oct 17",t:9,a:106,min:258}],"Nov 25":[{d:1,dt:"Nov 3",t:14,a:260,min:536},{d:2,dt:"Nov 4",t:20,a:314,min:753},{d:3,dt:"Nov 5",t:35,a:687,min:1037},{d:4,dt:"Nov 6",t:36,a:563,min:1065},{d:5,dt:"Nov 7",t:65,a:1140,min:1830},{d:6,dt:"Nov 10",t:24,a:353,min:704},{d:7,dt:"Nov 11",t:10,a:166,min:278},{d:8,dt:"Nov 12",t:17,a:249,min:428},{d:9,dt:"Nov 13",t:14,a:198,min:489},{d:10,dt:"Nov 14",t:19,a:210,min:457}],"Dec 25":[{d:1,dt:"Dec 1",t:5,a:30,min:100},{d:2,dt:"Dec 2",t:24,a:301,min:688},{d:3,dt:"Dec 3",t:32,a:607,min:1175},{d:4,dt:"Dec 4",t:81,a:1464,min:2613},{d:5,dt:"Dec 5",t:99,a:1811,min:3113},{d:6,dt:"Dec 8",t:47,a:602,min:1597},{d:7,dt:"Dec 9",t:53,a:622,min:1659},{d:8,dt:"Dec 10",t:61,a:807,min:1630},{d:9,dt:"Dec 11",t:29,a:360,min:813},{d:10,dt:"Dec 12",t:27,a:302,min:805}],"Jan 26":[{d:1,dt:"Jan 2",t:10,a:469,min:442},{d:2,dt:"Jan 5",t:15,a:283,min:840},{d:3,dt:"Jan 6",t:53,a:1000,min:1656},{d:4,dt:"Jan 7",t:61,a:1142,min:1797},{d:5,dt:"Jan 8",t:88,a:1551,min:3021},{d:6,dt:"Jan 9",t:97,a:1627,min:2755},{d:7,dt:"Jan 12",t:69,a:1244,min:2450},{d:8,dt:"Jan 13",t:56,a:669,min:1429},{d:9,dt:"Jan 14",t:50,a:376,min:952},{d:10,dt:"Jan 15",t:32,a:343,min:877}],"Feb 26":[{d:1,dt:"Feb 2",t:50,a:431,min:1205},{d:2,dt:"Feb 3",t:66,a:747,min:1957},{d:3,dt:"Feb 4",t:148,a:2336,min:4113},{d:4,dt:"Feb 5",t:162,a:2589,min:5520},{d:5,dt:"Feb 6",t:219,a:3687,min:7117},{d:6,dt:"Feb 9",t:166,a:2526,min:5462},{d:7,dt:"Feb 10",t:147,a:1748,min:3907},{d:8,dt:"Feb 11",t:129,a:1717,min:3626},{d:9,dt:"Feb 12",t:130,a:1635,min:3489},{d:10,dt:"Feb 13",t:90,a:905,min:2576}],"Mar 26*":[{d:1,dt:"Mar 2",t:47,a:627,min:2377},{d:2,dt:"Mar 3",t:123,a:1370,min:3406},{d:3,dt:"Mar 4",t:138,a:2478,min:4736},{d:4,dt:"Mar 5",t:222,a:3513,min:6773},{d:5,dt:"Mar 6",t:242,a:4357,min:7611},{d:6,dt:"Mar 9",t:205,a:2527,min:5764},{d:7,dt:"Mar 10",t:122,a:1631,min:4107},{d:8,dt:"Mar 11",t:121,a:1055,min:3455},{d:9,dt:"Mar 12",t:106,a:1120,min:3039},{d:10,dt:"Mar 13",t:2,a:47,min:91}]};
+const SFX_D10={"Oct 25":[{d:1,dt:"Oct 1",t:38,a:251,min:1253},{d:2,dt:"Oct 2",t:77,a:1161,min:1536},{d:3,dt:"Oct 3",t:375,a:6872,min:13168},{d:4,dt:"Oct 6",t:295,a:3989,min:8179},{d:5,dt:"Oct 7",t:245,a:3432,min:6743},{d:6,dt:"Oct 8",t:231,a:2708,min:5964},{d:7,dt:"Oct 9",t:198,a:2497,min:5499},{d:8,dt:"Oct 10",t:190,a:1773,min:4702},{d:9,dt:"Oct 13",t:113,a:1012,min:2842},{d:10,dt:"Oct 14",t:94,a:770,min:2776}],"Nov 25":[{d:1,dt:"Nov 3",t:59,a:438,min:1257},{d:2,dt:"Nov 4",t:70,a:690,min:1547},{d:3,dt:"Nov 5",t:236,a:3554,min:7657},{d:4,dt:"Nov 6",t:414,a:6396,min:12981},{d:5,dt:"Nov 7",t:272,a:3616,min:7221},{d:6,dt:"Nov 10",t:201,a:2192,min:5587},{d:7,dt:"Nov 11",t:129,a:1240,min:3897},{d:8,dt:"Nov 12",t:148,a:1547,min:3548},{d:9,dt:"Nov 13",t:135,a:1304,min:3765},{d:10,dt:"Nov 14",t:125,a:1164,min:3132}],"Dec 25":[{d:1,dt:"Dec 1",t:25,a:178,min:389},{d:2,dt:"Dec 2",t:14,a:147,min:342},{d:3,dt:"Dec 3",t:86,a:1105,min:2298},{d:4,dt:"Dec 4",t:274,a:4735,min:9305},{d:5,dt:"Dec 5",t:291,a:3970,min:7680},{d:6,dt:"Dec 8",t:139,a:1640,min:3521},{d:7,dt:"Dec 9",t:145,a:1430,min:3759},{d:8,dt:"Dec 10",t:125,a:1256,min:3101},{d:9,dt:"Dec 11",t:104,a:965,min:2642},{d:10,dt:"Dec 12",t:95,a:803,min:2384}],"Jan 26":[{d:1,dt:"Jan 2",t:30,a:318,min:1145},{d:2,dt:"Jan 5",t:13,a:196,min:535},{d:3,dt:"Jan 6",t:50,a:477,min:1407},{d:4,dt:"Jan 7",t:156,a:2226,min:4828},{d:5,dt:"Jan 8",t:235,a:4096,min:7701},{d:6,dt:"Jan 9",t:226,a:3214,min:6431},{d:7,dt:"Jan 12",t:143,a:1742,min:3630},{d:8,dt:"Jan 13",t:118,a:1076,min:2695},{d:9,dt:"Jan 14",t:144,a:1134,min:2990},{d:10,dt:"Jan 15",t:83,a:534,min:1864}],"Feb 26":[{d:1,dt:"Feb 2",t:31,a:270,min:691},{d:2,dt:"Feb 3",t:15,a:128,min:337},{d:3,dt:"Feb 4",t:19,a:243,min:507},{d:4,dt:"Feb 5",t:78,a:1146,min:2422},{d:5,dt:"Feb 6",t:103,a:1483,min:2507},{d:6,dt:"Feb 9",t:36,a:412,min:1009},{d:7,dt:"Feb 10",t:29,a:293,min:623},{d:8,dt:"Feb 11",t:17,a:150,min:535},{d:9,dt:"Feb 12",t:30,a:417,min:1010},{d:10,dt:"Feb 13",t:46,a:367,min:768}],"Mar 26*":[{d:1,dt:"Mar 2",t:23,a:185,min:297},{d:2,dt:"Mar 3",t:2,a:6,min:2},{d:3,dt:"Mar 4",t:15,a:145,min:261},{d:4,dt:"Mar 5",t:73,a:1344,min:2289},{d:5,dt:"Mar 6",t:59,a:742,min:1345},{d:6,dt:"Mar 9",t:33,a:464,min:954},{d:7,dt:"Mar 10",t:22,a:242,min:619},{d:8,dt:"Mar 11",t:17,a:144,min:266},{d:9,dt:"Mar 12",t:14,a:149,min:324},{d:10,dt:"Mar 13",t:9,a:32,min:365}]};
+
+const SFX_DES=[
+  {d:"Zoey Rosensweet",m:"Oct 25",a:4033,t:255,min:3332},{d:"Billy Owen",m:"Oct 25",a:1825,t:192,min:2515},{d:"Mike Getty",m:"Oct 25",a:2625,t:152,min:4278},{d:"Adam Pockette",m:"Oct 25",a:2100,t:175,min:4611},{d:"Lissy Bachelder",m:"Oct 25",a:1880,t:174,min:4156},{d:"Richard Stock",m:"Oct 25",a:1857,t:167,min:5197},{d:"Peter Chadwick",m:"Oct 25",a:2772,t:105,min:2807},{d:"Jack Kubera",m:"Oct 25",a:1271,t:114,min:5471},{d:"Sarah Gingras",m:"Oct 25",a:1407,t:121,min:5750},{d:"Eric Moulton",m:"Oct 25",a:1436,t:141,min:4027},{d:"Tyler Steff",m:"Oct 25",a:1370,t:97,min:4342},{d:"Stacey Manos",m:"Oct 25",a:1536,t:133,min:3344},{d:"Joel Lacoss",m:"Oct 25",a:922,t:175,min:4554},{d:"Hemza Elkhateeb",m:"Oct 25",a:635,t:191,min:4361},{d:"Sean Minor",m:"Oct 25",a:1193,t:130,min:7528},{d:"Doug Blackmore",m:"Oct 25",a:1539,t:99,min:2562},{d:"Lexi Boudreau",m:"Oct 25",a:526,t:47,min:2538},{d:"Patrick Freebern",m:"Oct 25",a:827,t:45,min:2107},{d:"Doug Chatman",m:"Oct 25",a:680,t:125,min:1221},{d:"Destiny Stringer",m:"Oct 25",a:288,t:29,min:686},
+  {d:"Hemza Elkhateeb",m:"Nov 25",a:1210,t:313,min:6768},{d:"Billy Owen",m:"Nov 25",a:2752,t:270,min:3811},{d:"Mike Getty",m:"Nov 25",a:2339,t:142,min:3621},{d:"Lissy Bachelder",m:"Nov 25",a:2393,t:199,min:5080},{d:"Richard Stock",m:"Nov 25",a:1824,t:179,min:6132},{d:"Zoey Rosensweet",m:"Nov 25",a:1944,t:166,min:1574},{d:"Tyler Steff",m:"Nov 25",a:1849,t:128,min:4806},{d:"Peter Chadwick",m:"Nov 25",a:1742,t:117,min:2806},{d:"Stacey Manos",m:"Nov 25",a:1793,t:166,min:4189},{d:"Jack Kubera",m:"Nov 25",a:1440,t:115,min:5271},{d:"Eric Moulton",m:"Nov 25",a:1667,t:119,min:3838},{d:"Adam Pockette",m:"Nov 25",a:1327,t:106,min:2966},{d:"Joel Lacoss",m:"Nov 25",a:908,t:124,min:3744},{d:"Sarah Gingras",m:"Nov 25",a:1297,t:103,min:4000},{d:"Sean Minor",m:"Nov 25",a:1371,t:66,min:4677},{d:"Lexi Boudreau",m:"Nov 25",a:843,t:65,min:3014},{d:"Doug Blackmore",m:"Nov 25",a:909,t:59,min:1595},{d:"Patrick Freebern",m:"Nov 25",a:703,t:60,min:2285},{d:"Doug Chatman",m:"Nov 25",a:434,t:78,min:746},{d:"Destiny Stringer",m:"Nov 25",a:569,t:54,min:935},
+  {d:"Hemza Elkhateeb",m:"Dec 25",a:1463,t:283,min:5756},{d:"Joel Lacoss",m:"Dec 25",a:1452,t:192,min:5189},{d:"Billy Owen",m:"Dec 25",a:2082,t:178,min:2767},{d:"Mike Getty",m:"Dec 25",a:1557,t:100,min:2075},{d:"Tyler Steff",m:"Dec 25",a:1356,t:81,min:3357},{d:"Lissy Bachelder",m:"Dec 25",a:1530,t:108,min:3115},{d:"Jack Kubera",m:"Dec 25",a:1269,t:97,min:4842},{d:"Peter Chadwick",m:"Dec 25",a:1190,t:96,min:1968},{d:"Richard Stock",m:"Dec 25",a:959,t:89,min:3491},{d:"Sarah Gingras",m:"Dec 25",a:1095,t:93,min:2326},{d:"Zoey Rosensweet",m:"Dec 25",a:948,t:67,min:768},{d:"Eric Moulton",m:"Dec 25",a:874,t:84,min:2572},{d:"Adam Pockette",m:"Dec 25",a:847,t:72,min:2161},{d:"Stacey Manos",m:"Dec 25",a:937,t:97,min:2751},{d:"Doug Blackmore",m:"Dec 25",a:1065,t:71,min:1674},{d:"Lexi Boudreau",m:"Dec 25",a:773,t:72,min:2824},{d:"Patrick Freebern",m:"Dec 25",a:509,t:47,min:1869},{d:"Doug Chatman",m:"Dec 25",a:529,t:64,min:877},{d:"Sean Minor",m:"Dec 25",a:428,t:29,min:2675},{d:"Destiny Stringer",m:"Dec 25",a:150,t:22,min:40},
+  {d:"Billy Owen",m:"Jan 26",a:1764,t:189,min:2934},{d:"Hemza Elkhateeb",m:"Jan 26",a:780,t:174,min:3964},{d:"Joel Lacoss",m:"Jan 26",a:806,t:159,min:4355},{d:"Lissy Bachelder",m:"Jan 26",a:1580,t:131,min:3645},{d:"Sarah Gingras",m:"Jan 26",a:1457,t:113,min:2244},{d:"Adam Pockette",m:"Jan 26",a:1279,t:110,min:2891},{d:"Jack Kubera",m:"Jan 26",a:1369,t:101,min:5054},{d:"Mike Getty",m:"Jan 26",a:1385,t:78,min:2116},{d:"Eric Moulton",m:"Jan 26",a:1114,t:93,min:3048},{d:"Stacey Manos",m:"Jan 26",a:1123,t:91,min:2852},{d:"Richard Stock",m:"Jan 26",a:990,t:86,min:3083},{d:"Tyler Steff",m:"Jan 26",a:996,t:77,min:3330},{d:"Doug Chatman",m:"Jan 26",a:675,t:96,min:1429},{d:"Doug Blackmore",m:"Jan 26",a:858,t:56,min:1412},{d:"Patrick Freebern",m:"Jan 26",a:661,t:51,min:2141},{d:"Peter Chadwick",m:"Jan 26",a:465,t:51,min:1492},{d:"Sean Minor",m:"Jan 26",a:547,t:42,min:2070},{d:"Destiny Stringer",m:"Jan 26",a:505,t:38,min:395},{d:"Lexi Boudreau",m:"Jan 26",a:375,t:32,min:1785},{d:"Zoey Rosensweet",m:"Jan 26",a:524,t:19,min:320},
+  {d:"Billy Owen",m:"Feb 26",a:1651,t:201,min:2194},{d:"Jack Kubera",m:"Feb 26",a:551,t:53,min:2372},{d:"Lissy Bachelder",m:"Feb 26",a:662,t:44,min:1045},{d:"Sean Minor",m:"Feb 26",a:484,t:33,min:1066},{d:"Eric Moulton",m:"Feb 26",a:377,t:31,min:1009},{d:"Adam Pockette",m:"Feb 26",a:296,t:26,min:684},{d:"Tyler Steff",m:"Feb 26",a:256,t:24,min:772},{d:"Patrick Freebern",m:"Feb 26",a:280,t:21,min:915},{d:"Mike Getty",m:"Feb 26",a:332,t:19,min:632},{d:"Stacey Manos",m:"Feb 26",a:203,t:10,min:360},{d:"Zoey Rosensweet",m:"Feb 26",a:181,t:11,min:155},{d:"Sarah Gingras",m:"Feb 26",a:198,t:16,min:350},{d:"Lexi Boudreau",m:"Feb 26",a:145,t:10,min:585},{d:"Doug Chatman",m:"Feb 26",a:143,t:16,min:189},{d:"Peter Chadwick",m:"Feb 26",a:127,t:12,min:285},{d:"Richard Stock",m:"Feb 26",a:51,t:5,min:137},{d:"Hemza Elkhateeb",m:"Feb 26",a:11,t:4,min:48},{d:"Destiny Stringer",m:"Feb 26",a:19,t:4,min:141},
+  {d:"Billy Owen",m:"Mar 26*",a:1431,t:119,min:2001},{d:"Jack Kubera",m:"Mar 26*",a:389,t:30,min:1684},{d:"Lissy Bachelder",m:"Mar 26*",a:294,t:22,min:575},{d:"Tyler Steff",m:"Mar 26*",a:223,t:20,min:640},{d:"Patrick Freebern",m:"Mar 26*",a:231,t:14,min:522},{d:"Mike Getty",m:"Mar 26*",a:277,t:12,min:273},{d:"Sean Minor",m:"Mar 26*",a:147,t:15,min:515},{d:"Eric Moulton",m:"Mar 26*",a:114,t:10,min:246},{d:"Zoey Rosensweet",m:"Mar 26*",a:161,t:5,min:80},{d:"Adam Pockette",m:"Mar 26*",a:65,t:9,min:159},{d:"Doug Chatman",m:"Mar 26*",a:86,t:10,min:125},{d:"Richard Stock",m:"Mar 26*",a:67,t:7,min:266},{d:"Sarah Gingras",m:"Mar 26*",a:34,t:3,min:60},{d:"Doug Blackmore",m:"Mar 26*",a:8,t:2,min:20},{d:"Destiny Stringer",m:"Mar 26*",a:3,t:1,min:0},
+];
+
+const WOMS_DES=[
+  {d:"Doug Blackmore",m:"Oct 25",a:295,t:25,min:672},{d:"Adam Pockette",m:"Oct 25",a:177,t:24,min:644},{d:"Jack Kubera",m:"Oct 25",a:173,t:10,min:320},{d:"Peter Chadwick",m:"Oct 25",a:107,t:8,min:147},{d:"Sarah Gingras",m:"Oct 25",a:82,t:3,min:170},{d:"Eric Moulton",m:"Oct 25",a:48,t:12,min:270},{d:"Richard Stock",m:"Oct 25",a:39,t:8,min:343},{d:"Billy Owen",m:"Oct 25",a:32,t:3,min:47},{d:"Zoey Rosensweet",m:"Oct 25",a:19,t:5,min:33},{d:"Lissy Bachelder",m:"Oct 25",a:14,t:2,min:75},{d:"Tyler Steff",m:"Oct 25",a:12,t:2,min:31},{d:"Sean Minor",m:"Oct 25",a:10,t:1,min:15},
+  {d:"Zoey Rosensweet",m:"Nov 25",a:1645,t:102,min:1402},{d:"Adam Pockette",m:"Nov 25",a:1481,t:104,min:3477},{d:"Doug Blackmore",m:"Nov 25",a:1117,t:74,min:2175},{d:"Sean Minor",m:"Nov 25",a:618,t:25,min:1591},{d:"Sarah Gingras",m:"Nov 25",a:347,t:31,min:1223},{d:"Eric Moulton",m:"Nov 25",a:339,t:45,min:1383},{d:"Jack Kubera",m:"Nov 25",a:184,t:14,min:738},{d:"Richard Stock",m:"Nov 25",a:149,t:10,min:301},{d:"Mike Getty",m:"Nov 25",a:144,t:7,min:206},
+  {d:"Zoey Rosensweet",m:"Dec 25",a:1773,t:98,min:1532},{d:"Adam Pockette",m:"Dec 25",a:1208,t:95,min:3462},{d:"Doug Blackmore",m:"Dec 25",a:1172,t:90,min:2430},{d:"Sean Minor",m:"Dec 25",a:1163,t:32,min:2504},{d:"Sarah Gingras",m:"Dec 25",a:536,t:63,min:1390},{d:"Richard Stock",m:"Dec 25",a:524,t:49,min:1521},{d:"Eric Moulton",m:"Dec 25",a:493,t:65,min:1752},{d:"Mike Getty",m:"Dec 25",a:452,t:30,min:819},{d:"Lissy Bachelder",m:"Dec 25",a:305,t:35,min:1050},{d:"Jack Kubera",m:"Dec 25",a:268,t:23,min:1016},{d:"Peter Chadwick",m:"Dec 25",a:48,t:3,min:90},{d:"Hemza Elkhateeb",m:"Dec 25",a:46,t:11,min:129},{d:"Patrick Freebern",m:"Dec 25",a:34,t:2,min:74},{d:"Billy Owen",m:"Dec 25",a:19,t:1,min:30},
+  {d:"Sean Minor",m:"Jan 26",a:1627,t:51,min:3134},{d:"Zoey Rosensweet",m:"Jan 26",a:1601,t:100,min:1520},{d:"Adam Pockette",m:"Jan 26",a:1177,t:107,min:3110},{d:"Doug Blackmore",m:"Jan 26",a:1101,t:72,min:2066},{d:"Mike Getty",m:"Jan 26",a:925,t:25,min:1215},{d:"Richard Stock",m:"Jan 26",a:798,t:86,min:2447},{d:"Sarah Gingras",m:"Jan 26",a:784,t:80,min:1759},{d:"Eric Moulton",m:"Jan 26",a:497,t:46,min:1444},{d:"Peter Chadwick",m:"Jan 26",a:484,t:10,min:420},{d:"Lissy Bachelder",m:"Jan 26",a:476,t:38,min:1280},{d:"Lexi Boudreau",m:"Jan 26",a:298,t:23,min:1001},{d:"Jack Kubera",m:"Jan 26",a:137,t:10,min:473},{d:"Billy Owen",m:"Jan 26",a:111,t:8,min:200},{d:"Doug Chatman",m:"Jan 26",a:103,t:10,min:213},{d:"Hemza Elkhateeb",m:"Jan 26",a:64,t:18,min:390},{d:"Patrick Freebern",m:"Jan 26",a:58,t:7,min:185},
+  {d:"Zoey Rosensweet",m:"Feb 26",a:2640,t:127,min:1999},{d:"Sarah Gingras",m:"Feb 26",a:1952,t:151,min:3646},{d:"Mike Getty",m:"Feb 26",a:1934,t:105,min:2983},{d:"Peter Chadwick",m:"Feb 26",a:1880,t:80,min:2459},{d:"Sean Minor",m:"Feb 26",a:1701,t:151,min:4172},{d:"Richard Stock",m:"Feb 26",a:1673,t:170,min:4708},{d:"Adam Pockette",m:"Feb 26",a:1639,t:141,min:4206},{d:"Lissy Bachelder",m:"Feb 26",a:1519,t:119,min:3750},{d:"Hemza Elkhateeb",m:"Feb 26",a:1419,t:230,min:7281},{d:"Tyler Steff",m:"Feb 26",a:1192,t:82,min:3290},{d:"Eric Moulton",m:"Feb 26",a:1189,t:119,min:3241},{d:"Stacey Manos",m:"Feb 26",a:971,t:74,min:2571},{d:"Joel Lacoss",m:"Feb 26",a:846,t:124,min:4438},{d:"Billy Owen",m:"Feb 26",a:705,t:59,min:1346},{d:"Doug Blackmore",m:"Feb 26",a:562,t:42,min:1250},{d:"Patrick Freebern",m:"Feb 26",a:496,t:36,min:1347},{d:"Jack Kubera",m:"Feb 26",a:482,t:41,min:2315},{d:"Lexi Boudreau",m:"Feb 26",a:481,t:51,min:1945},{d:"Destiny Stringer",m:"Feb 26",a:140,t:11,min:340},
+  {d:"Zoey Rosensweet",m:"Mar 26*",a:2214,t:135,min:1971},{d:"Doug Blackmore",m:"Mar 26*",a:1956,t:109,min:2855},{d:"Adam Pockette",m:"Mar 26*",a:1637,t:122,min:3678},{d:"Richard Stock",m:"Mar 26*",a:1327,t:100,min:2735},{d:"Sarah Gingras",m:"Mar 26*",a:1306,t:89,min:2530},{d:"Mike Getty",m:"Mar 26*",a:1256,t:52,min:1862},{d:"Eric Moulton",m:"Mar 26*",a:1241,t:93,min:3180},{d:"Peter Chadwick",m:"Mar 26*",a:1164,t:74,min:2132},{d:"Tyler Steff",m:"Mar 26*",a:1134,t:62,min:2511},{d:"Sean Minor",m:"Mar 26*",a:1056,t:57,min:2801},{d:"Joel Lacoss",m:"Mar 26*",a:1024,t:89,min:3238},{d:"Lissy Bachelder",m:"Mar 26*",a:819,t:58,min:2050},{d:"Hemza Elkhateeb",m:"Mar 26*",a:723,t:140,min:3903},{d:"Lexi Boudreau",m:"Mar 26*",a:617,t:50,min:1993},{d:"Patrick Freebern",m:"Mar 26*",a:487,t:37,min:1388},{d:"Stacey Manos",m:"Mar 26*",a:449,t:28,min:956},{d:"Jack Kubera",m:"Mar 26*",a:267,t:21,min:1512},{d:"Billy Owen",m:"Mar 26*",a:151,t:13,min:308},{d:"Destiny Stringer",m:"Mar 26*",a:45,t:4,min:105},{d:"Jonathan Loveless",m:"Mar 26*",a:26,t:6,min:128},
+];
+
+const n=v=>Number(v||0).toLocaleString();
+const agg=(arr,k)=>arr.reduce((s,r)=>s+(r[k]||0),0);
+
+const Tip=({active,payload,label})=>{
+  if(!active||!payload)return null;
+  return(<div style={{background:CARD,border:"1px solid "+BORD,borderRadius:8,padding:"10px 14px",fontSize:11,maxWidth:260,color:TEXT}}>
+    <div style={{fontWeight:700,marginBottom:4}}>{label}</div>
+    {payload.filter(p=>p.value>0).map((p,i)=>(<div key={i} style={{color:p.color||p.fill||p.stroke,marginBottom:1}}>{p.name}: <strong>{typeof p.value==="number"?p.value.toLocaleString():p.value}</strong></div>))}
+  </div>);
+};
+const Stat=({label,value,sub,color})=>(
+  <div style={{background:CARD,borderRadius:10,padding:"12px 14px",borderLeft:"4px solid "+(color||SFX_C)}}>
+    <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,color:MUTED,marginBottom:3}}>{label}</div>
+    <div style={{fontSize:18,fontWeight:700,color:TEXT,lineHeight:1.1}}>{value}</div>
+    {sub&&<div style={{fontSize:11,color:MUTED,marginTop:3}}>{sub}</div>}
+  </div>);
+const Pill=({active,label,onClick,color})=>{
+  const c=color||"#94a3b8";
+  return(<button onClick={onClick} style={{padding:"4px 11px",borderRadius:20,border:active?"2px solid "+c:"1px solid "+BORD,background:active?c+"22":"transparent",color:active?c:MUTED,fontSize:11,fontWeight:600,cursor:"pointer",marginRight:5,marginBottom:5,whiteSpace:"nowrap"}}>{label}</button>);
+};
+const Box=({title,children})=>(
+  <div style={{background:CARD,borderRadius:10,padding:"14px 18px",marginBottom:12}}>
+    <div style={{fontSize:12,fontWeight:700,color:TEXT,marginBottom:12}}>{title}</div>
+    {children}
+  </div>);
+const thS=(hi,left)=>({textAlign:left?"left":"right",padding:"6px 8px",fontSize:10,fontWeight:700,color:hi?"#34d399":MUTED,textTransform:"uppercase",borderBottom:"1px solid "+BORD});
+const tdS=(o)=>{const p=o||{};return{padding:"6px 8px",textAlign:p.l?"left":"right",fontWeight:p.b?700:p.m?600:400,color:p.c||"#cbd5e1",fontSize:11,borderBottom:"1px solid "+BG};};
+const rowBg=i=>({background:i%2===0?BG:"#1a2535"});
+
+function Dashboard(){
+  const [tab,setTab]=useState("overview");
+  const [view,setView]=useState("assets");
+  const [selDes,setSelDes]=useState("All");
+  const [paceView,setPaceView]=useState("assets");
+  const [paceChart,setPaceChart]=useState("cumulative");
+  const [bwMonth,setBwMonth]=useState("Feb 26");
+  const [bwSort,setBwSort]=useState("util");
+
+  const totSfx={t:agg(MONTHLY,"sfxT"),a:agg(MONTHLY,"sfxA"),min:agg(MONTHLY,"sfxMin"),rw:agg(MONTHLY,"sfxRw")};
+  const totWoms={t:agg(MONTHLY,"womsT"),a:agg(MONTHLY,"womsA"),min:agg(MONTHLY,"womsMin"),rw:agg(MONTHLY,"womsRw")};
+  const totAll={t:totSfx.t+totWoms.t,a:totSfx.a+totWoms.a,min:totSfx.min+totWoms.min,rw:totSfx.rw+totWoms.rw};
+
+  const des6mo=useMemo(()=>{
+    const map={};
+    SFX_DES.forEach(r=>{if(!map[r.d])map[r.d]={name:r.d,sfxA:0,sfxT:0,sfxMin:0,womsA:0,womsT:0,womsMin:0};map[r.d].sfxA+=r.a;map[r.d].sfxT+=r.t;map[r.d].sfxMin+=r.min;});
+    WOMS_DES.forEach(r=>{if(!map[r.d])map[r.d]={name:r.d,sfxA:0,sfxT:0,sfxMin:0,womsA:0,womsT:0,womsMin:0};map[r.d].womsA+=r.a;map[r.d].womsT+=r.t;map[r.d].womsMin+=r.min;});
+    return Object.values(map).map(d=>({...d,totA:d.sfxA+d.womsA,totT:d.sfxT+d.womsT,totMin:d.sfxMin+d.womsMin,totH:((d.sfxMin+d.womsMin)/60).toFixed(1)})).sort((a,b)=>b.totA-a.totA);
+  },[]);
+
+  const allDes=["All",...des6mo.map(d=>d.name)];
+  const desMoHistory=useMemo(()=>{
+    const sfxF=selDes==="All"?SFX_DES:SFX_DES.filter(r=>r.d===selDes);
+    const womsF=selDes==="All"?WOMS_DES:WOMS_DES.filter(r=>r.d===selDes);
+    const map={};MONTHS_ORDER.forEach(m=>{map[m]={m,sfxA:0,womsA:0,sfxMin:0,womsMin:0};});
+    sfxF.forEach(r=>{if(map[r.m]){map[r.m].sfxA+=r.a;map[r.m].sfxMin+=r.min;}});
+    womsF.forEach(r=>{if(map[r.m]){map[r.m].womsA+=r.a;map[r.m].womsMin+=r.min;}});
+    return MONTHS_ORDER.map(m=>({...map[m],totA:map[m].sfxA+map[m].womsA}));
+  },[selDes]);
+  const desDetail=useMemo(()=>{
+    if(selDes==="All")return[];
+    return MONTHS_ORDER.map(m=>{
+      const sx=SFX_DES.find(r=>r.d===selDes&&r.m===m)||{a:0,t:0,min:0};
+      const wo=WOMS_DES.find(r=>r.d===selDes&&r.m===m)||{a:0,t:0,min:0};
+      return{m,sfxA:sx.a,sfxT:sx.t,sfxH:Math.round(sx.min/60),womsA:wo.a,womsT:wo.t,womsH:Math.round(wo.min/60),totA:sx.a+wo.a,totH:Math.round((sx.min+wo.min)/60)};
+    });
+  },[selDes]);
+
+  // Pace data
+  const getVal=(src,m,i,field)=>{const d=src[m];return d&&d[i]?(field==="assets"?d[i].a:field==="tasks"?d[i].t:Math.round(d[i].min/60)):0;};
+  const paceDailyData=useMemo(()=>Array.from({length:10},(_,i)=>{const row={day:"Day "+(i+1)};MONTHS_ORDER.forEach(m=>{row[m]=getVal(SFX_D10,m,i,paceView)+getVal(WOMS_D10,m,i,paceView);});return row;}),[paceView]);
+  const paceCumData=useMemo(()=>Array.from({length:10},(_,i)=>{const row={day:"Day "+(i+1)};MONTHS_ORDER.forEach(m=>{let s=0;for(let j=0;j<=i;j++)s+=getVal(SFX_D10,m,j,paceView)+getVal(WOMS_D10,m,j,paceView);row[m]=s;});return row;}),[paceView]);
+  const paceSourceData=useMemo(()=>Array.from({length:10},(_,i)=>{const row={day:"Day "+(i+1),SFX:0,WOMS:0};MONTHS_ORDER.forEach(m=>{row.SFX+=getVal(SFX_D10,m,i,paceView);row.WOMS+=getVal(WOMS_D10,m,i,paceView);});return row;}),[paceView]);
+  const paceSummary=MONTHS_ORDER.map(m=>{
+    const sfxDays=SFX_D10[m]||[];const womsDays=WOMS_D10[m]||[];
+    const sfxA=sfxDays.reduce((s,d)=>s+d.a,0);const womsA=womsDays.reduce((s,d)=>s+d.a,0);
+    const sfxT=sfxDays.reduce((s,d)=>s+d.t,0);const womsT=womsDays.reduce((s,d)=>s+d.t,0);
+    const totA=sfxA+womsA;const totT=sfxT+womsT;const totH=Math.round((sfxDays.reduce((s,d)=>s+d.min,0)+womsDays.reduce((s,d)=>s+d.min,0))/60);
+    const moRow=MONTHLY.find(r=>r.m===m);const fullA=moRow?moRow.totA:0;
+    return{m,sfxA,womsA,totA,sfxT,womsT,totT,totH,fullA,pct:fullA>0?Math.round((totA/fullA)*100):null};
+  });
+
+  // Bandwidth utilization data
+  const bwData=useMemo(()=>{
+    const bizDays=BIZ_DAYS[bwMonth]||20;
+    const capacity=bizDays*8;
+    const map={};
+    SFX_DES.filter(r=>r.m===bwMonth).forEach(r=>{if(!map[r.d])map[r.d]={name:r.d,sfxMin:0,womsMin:0};map[r.d].sfxMin+=r.min;});
+    WOMS_DES.filter(r=>r.m===bwMonth).forEach(r=>{if(!map[r.d])map[r.d]={name:r.d,sfxMin:0,womsMin:0};map[r.d].womsMin+=r.min;});
+    const rows=Object.values(map).map(d=>{
+      const sfxH=parseFloat((d.sfxMin/60).toFixed(1));
+      const womsH=parseFloat((d.womsMin/60).toFixed(1));
+      const totH=parseFloat((sfxH+womsH).toFixed(1));
+      const util=Math.min(Math.round((totH/capacity)*100),100);
+      return{name:d.name,sfxH,womsH,totH,capacity,util,sfxPct:Math.min((sfxH/capacity)*100,100),womsPct:Math.min((womsH/capacity)*100,100)};
+    });
+    if(bwSort==="util")return rows.sort((a,b)=>b.util-a.util);
+    if(bwSort==="sfx")return rows.sort((a,b)=>b.sfxH-a.sfxH);
+    if(bwSort==="woms")return rows.sort((a,b)=>b.womsH-a.womsH);
+    return rows.sort((a,b)=>a.name.localeCompare(b.name));
+  },[bwMonth,bwSort]);
+
+  const bwBizDays=BIZ_DAYS[bwMonth]||20;
+  const bwCapacity=bwBizDays*8;
+  const bwTotSfx=bwData.reduce((s,d)=>s+d.sfxH,0);
+  const bwTotWoms=bwData.reduce((s,d)=>s+d.womsH,0);
+  const bwTotWorked=bwData.reduce((s,d)=>s+d.totH,0);
+  const bwTotCapacity=bwData.length*bwCapacity;
+  const bwTeamUtil=bwTotCapacity>0?Math.round((bwTotWorked/bwTotCapacity)*100):0;
+
+  const vLabel={assets:"Assets",tasks:"Tasks",hours:"Hours"};
+  const trendData=MONTHLY.map(r=>view==="assets"?{m:r.m,SFX:r.sfxA,WOMS:r.womsA}:view==="tasks"?{m:r.m,SFX:r.sfxT,WOMS:r.womsT}:{m:r.m,SFX:r.sfxH,WOMS:r.womsH});
+  const today=new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+  const tabList=[["overview","Overview"],["trends","Monthly Trends"],["designers","Designer Bandwidth"],["history","Designer History"],["pace","10-Day Pace"],["bandwidth","Hours Utilization"]];
+
+  return(
+    <div style={{minHeight:"100vh",background:BG,color:TEXT,fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif"}}>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}button{font-family:inherit;cursor:pointer}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}`}</style>
+
+      <div style={{background:"linear-gradient(135deg,#0c1a2e,#0f2744,#0c1a2e)",padding:"16px 20px 0",borderBottom:"1px solid #1e3a5f"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:2,textTransform:"uppercase",color:"#67e8f9",marginBottom:2}}>Managed Services C&C</div>
+            <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>MS C&C Design Dashboard</div>
+            <div style={{fontSize:11,color:"#64748b",marginTop:1}}>SFX Creative + WOMS &middot; Oct 2025 - Mar 2026</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+            <div style={{fontSize:10,color:"#64748b"}}>Refreshed {today}</div>
+            <div style={{display:"flex",gap:4,fontSize:9}}>
+              <span style={{background:"rgba(8,145,178,.2)",color:"#67e8f9",padding:"2px 7px",borderRadius:8,fontWeight:600,border:"1px solid rgba(8,145,178,.3)"}}>SFX Creative</span>
+              <span style={{background:"rgba(225,29,72,.2)",color:"#fda4af",padding:"2px 7px",borderRadius:8,fontWeight:600,border:"1px solid rgba(225,29,72,.3)"}}>WOMS</span>
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:2,flexWrap:"wrap"}}>
+          {tabList.map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{padding:"6px 14px",borderRadius:"7px 7px 0 0",border:"none",background:tab===k?BG:"transparent",color:tab===k?"#f1f5f9":"#64748b",fontWeight:tab===k?700:500,fontSize:11,cursor:"pointer"}}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:"12px 20px 40px",maxWidth:1400,margin:"0 auto"}}>
+
+        {tab==="overview"&&(
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8,marginBottom:12}}>
+              <Stat label="Total Tasks" value={n(totAll.t)} sub="6 months" color="#0c4a6e"/>
+              <Stat label="Total Hours" value={n(Math.round(totAll.min/60))} sub={n(totAll.min)+" min"} color={SFX_C}/>
+              <Stat label="Design Assets" value={n(totAll.a)} color="#059669"/>
+              <Stat label="Rework Rate" value={((totAll.rw/totAll.t)*100).toFixed(1)+"%"} sub={n(totAll.rw)+" reworks"} color="#dc2626"/>
+              <Stat label="Designers" value={des6mo.length} sub="Full roster" color="#7c3aed"/>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+              <div style={{background:CARD,borderRadius:10,padding:"14px 16px",borderTop:"3px solid "+SFX_C}}>
+                <div style={{fontSize:12,fontWeight:700,color:TEXT,marginBottom:10}}>SFX Creative <span style={{background:SFX_C,color:"#fff",padding:"1px 5px",borderRadius:8,fontSize:9,fontWeight:700,marginLeft:4}}>SFX</span></div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                  <Stat label="Tasks" value={n(totSfx.t)} color={SFX_C}/><Stat label="Assets" value={n(totSfx.a)} color={SFX_C}/>
+                  <Stat label="Hours" value={n(Math.round(totSfx.min/60))} color={SFX_C}/><Stat label="Rework %" value={((totSfx.rw/totSfx.t)*100).toFixed(1)+"%"} color="#dc2626"/>
+                </div>
+              </div>
+              <div style={{background:CARD,borderRadius:10,padding:"14px 16px",borderTop:"3px solid "+WOMS_C}}>
+                <div style={{fontSize:12,fontWeight:700,color:TEXT,marginBottom:10}}>WOMS <span style={{background:WOMS_C,color:"#fff",padding:"1px 5px",borderRadius:8,fontSize:9,fontWeight:700,marginLeft:4}}>WOMS</span></div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                  <Stat label="Tasks" value={n(totWoms.t)} color={WOMS_C}/><Stat label="Assets" value={n(totWoms.a)} color={WOMS_C}/>
+                  <Stat label="Hours" value={n(Math.round(totWoms.min/60))} color={WOMS_C}/><Stat label="Rework %" value={((totWoms.rw/totWoms.t)*100).toFixed(1)+"%"} color="#dc2626"/>
+                </div>
+              </div>
+            </div>
+            <Box title="System migration — SFX to WOMS (assets per month)">
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={MONTHLY.map(r=>({m:r.m,SFX:r.sfxA,WOMS:r.womsA,wPct:r.wPct}))} margin={{left:0,right:45}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CARD}/>
+                  <XAxis dataKey="m" tick={{fontSize:10,fill:MUTED}}/><YAxis yAxisId="l" tick={{fontSize:10,fill:MUTED}}/><YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:MUTED}} unit="%" domain={[0,100]}/>
+                  <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                  <Bar yAxisId="l" dataKey="SFX" stackId="a" fill={SFX_C} name="SFX Assets" barSize={30}/>
+                  <Bar yAxisId="l" dataKey="WOMS" stackId="a" fill={WOMS_C} name="WOMS Assets" barSize={30} radius={[4,4,0,0]}/>
+                  <Line yAxisId="r" type="monotone" dataKey="wPct" stroke={YEL} strokeWidth={2.5} dot={{r:4,fill:YEL,stroke:BG,strokeWidth:2}} name="WOMS %"/>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </Box>
+            <Box title="Month-over-month summary">
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>{["Month","SFX Tasks","SFX Assets","SFX Hrs","WOMS Tasks","WOMS Assets","WOMS Hrs","Total Assets","Total Hrs","Rework %"].map(h=><th key={h} style={thS(h.includes("Assets"),h==="Month")}>{h}</th>)}</tr></thead>
+                  <tbody>{MONTHLY.map((r,i)=>(
+                    <tr key={r.m} style={rowBg(i)}>
+                      <td style={tdS({l:true,b:true,c:TEXT})}>{r.m}</td>
+                      <td style={tdS({c:SFX_C})}>{n(r.sfxT)}</td><td style={tdS({b:true,c:"#67e8f9"})}>{n(r.sfxA)}</td><td style={tdS({c:MUTED})}>{n(r.sfxH)}</td>
+                      <td style={tdS({c:WOMS_C})}>{n(r.womsT)}</td><td style={tdS({b:true,c:"#fda4af"})}>{n(r.womsA)}</td><td style={tdS({c:MUTED})}>{n(r.womsH)}</td>
+                      <td style={tdS({b:true,c:"#34d399"})}>{n(r.totA)}</td><td style={tdS({b:true,c:TEXT})}>{n(r.totH)}</td>
+                      <td style={tdS({m:true,c:r.rwPct>20?"#f87171":MUTED})}>{r.rwPct}%</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </Box>
+          </div>
+        )}
+
+        {tab==="trends"&&(
+          <div>
+            <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:11,fontWeight:700,color:MUTED,marginRight:4}}>View:</span>
+              {[["assets","Design Assets"],["tasks","Tasks"],["hours","Hours"]].map(([k,l])=><Pill key={k} active={view===k} label={l} onClick={()=>setView(k)} color={SFX_C}/>)}
+            </div>
+            <Box title={vLabel[view]+" per month — SFX vs WOMS"}>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={trendData} margin={{left:0,right:12}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CARD}/><XAxis dataKey="m" tick={{fontSize:10,fill:MUTED}}/><YAxis tick={{fontSize:10,fill:MUTED}}/>
+                  <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                  <Bar dataKey="SFX" stackId="a" fill={SFX_C} name="SFX Creative" barSize={30}/>
+                  <Bar dataKey="WOMS" stackId="a" fill={WOMS_C} name="WOMS" barSize={30} radius={[4,4,0,0]}/>
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+            <Box title="Monthly rework rate — SFX vs WOMS vs combined">
+              <ResponsiveContainer width="100%" height={200}>
+                <ComposedChart data={MONTHLY.map(r=>({m:r.m,SFX:r.sfxRwPct,WOMS:r.womsRwPct,Combined:r.rwPct}))} margin={{left:0,right:12}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CARD}/><XAxis dataKey="m" tick={{fontSize:10,fill:MUTED}}/><YAxis tick={{fontSize:10,fill:MUTED}} unit="%" domain={[0,40]}/>
+                  <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                  <Line type="monotone" dataKey="SFX" stroke={SFX_C} strokeWidth={2} dot={{r:3}} name="SFX %"/>
+                  <Line type="monotone" dataKey="WOMS" stroke={WOMS_C} strokeWidth={2} dot={{r:3}} name="WOMS %"/>
+                  <Line type="monotone" dataKey="Combined" stroke={YEL} strokeWidth={2} strokeDasharray="5 3" dot={{r:3}} name="Combined %"/>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </Box>
+          </div>
+        )}
+
+        {tab==="designers"&&(
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8,marginBottom:12}}>
+              <Stat label="Total Designers" value={des6mo.length} sub="6-month roster" color="#0c4a6e"/>
+              <Stat label="Total Assets" value={n(agg(des6mo,"totA"))} color="#059669"/>
+              <Stat label="Total Tasks" value={n(agg(des6mo,"totT"))} color={SFX_C}/>
+              <Stat label="Total Hours" value={n(Math.round(agg(des6mo,"totMin")/60))} color={WOMS_C}/>
+              <Stat label="Avg Assets" value={n(Math.round(agg(des6mo,"totA")/Math.max(des6mo.length,1)))} sub="per designer" color="#7c3aed"/>
+            </div>
+            <Box title="Total assets per designer — 6-month combined (SFX + WOMS)">
+              <ResponsiveContainer width="100%" height={620}>
+                <BarChart data={des6mo} layout="vertical" margin={{left:10,right:55,top:5,bottom:5}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CARD}/><XAxis type="number" tick={{fontSize:9,fill:MUTED}}/><YAxis type="category" dataKey="name" width={140} tick={{fontSize:9,fill:"#cbd5e1"}}/>
+                  <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                  <Bar dataKey="sfxA" stackId="a" fill={SFX_C} name="SFX Assets"/>
+                  <Bar dataKey="womsA" stackId="a" fill={WOMS_C} name="WOMS Assets" radius={[0,4,4,0]}/>
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+            <div style={{height:10}}/>
+            <Box title="Designer summary — 6-month total (sorted by total assets)">
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>{["Designer","SFX Assets","WOMS Assets","Total Assets","Tasks","Hours","Avg Min/Task"].map(h=><th key={h} style={thS(h.includes("Assets"),h==="Designer")}>{h}</th>)}</tr></thead>
+                  <tbody>{des6mo.map((d,i)=>{const avg=d.totT>0?(d.totMin/d.totT).toFixed(1):"0";return(
+                    <tr key={d.name} style={rowBg(i)}>
+                      <td style={tdS({l:true,b:true,c:TEXT})}>{d.name}</td>
+                      <td style={tdS({m:true,c:"#67e8f9"})}>{d.sfxA>0?n(d.sfxA):"-"}</td><td style={tdS({m:true,c:"#fda4af"})}>{d.womsA>0?n(d.womsA):"-"}</td>
+                      <td style={tdS({b:true,c:"#34d399"})}>{n(d.totA)}</td><td style={tdS({c:"#cbd5e1"})}>{n(d.totT)}</td>
+                      <td style={tdS({c:MUTED})}>{d.totH}</td><td style={tdS({b:true,c:parseFloat(avg)>45?"#f87171":"#4ade80"})}>{avg}</td>
+                    </tr>);})}</tbody>
+                </table>
+              </div>
+            </Box>
+          </div>
+        )}
+
+        {tab==="history"&&(
+          <div>
+            <div style={{background:CARD,borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:11,fontWeight:700,color:MUTED,marginRight:6}}>Designer:</span>
+              {allDes.map(d=><Pill key={d} active={selDes===d} label={d==="All"?"All":d.split(" ")[0]} onClick={()=>setSelDes(d)} color={d==="All"?"#94a3b8":SFX_C}/>)}
+            </div>
+            <Box title={(selDes==="All"?"All designers":"Designer: "+selDes)+" — monthly assets (SFX + WOMS)"}>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={desMoHistory} margin={{left:0,right:12}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CARD}/><XAxis dataKey="m" tick={{fontSize:10,fill:MUTED}}/><YAxis tick={{fontSize:10,fill:MUTED}}/>
+                  <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                  <Bar dataKey="sfxA" stackId="a" fill={SFX_C} name="SFX Assets" barSize={30}/>
+                  <Bar dataKey="womsA" stackId="a" fill={WOMS_C} name="WOMS Assets" barSize={30} radius={[4,4,0,0]}/>
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+            {selDes!=="All"&&(<div><div style={{height:10}}/>
+              <Box title={"Monthly breakdown — "+selDes}>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead><tr>{["Month","SFX Tasks","SFX Assets","SFX Hrs","WOMS Tasks","WOMS Assets","WOMS Hrs","Total Assets","Total Hrs"].map(h=><th key={h} style={thS(h.includes("Assets"),h==="Month")}>{h}</th>)}</tr></thead>
+                    <tbody>{desDetail.map((r,i)=>(
+                      <tr key={r.m} style={rowBg(i)}>
+                        <td style={tdS({l:true,b:true,c:TEXT})}>{r.m}</td>
+                        <td style={tdS({c:SFX_C})}>{r.sfxT||"-"}</td><td style={tdS({m:true,c:"#67e8f9"})}>{r.sfxA>0?n(r.sfxA):"-"}</td><td style={tdS({c:MUTED})}>{r.sfxH||"-"}</td>
+                        <td style={tdS({c:WOMS_C})}>{r.womsT||"-"}</td><td style={tdS({m:true,c:"#fda4af"})}>{r.womsA>0?n(r.womsA):"-"}</td><td style={tdS({c:MUTED})}>{r.womsH||"-"}</td>
+                        <td style={tdS({b:true,c:"#34d399"})}>{n(r.totA)}</td><td style={tdS({b:true,c:TEXT})}>{r.totH||"-"}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              </Box>
+            </div>)}
+          </div>
+        )}
+
+        {tab==="pace"&&(
+          <div>
+            <div style={{background:CARD,borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:11,color:MUTED}}>
+              SFX Creative + WOMS combined &middot; First 10 working days per month &middot; Weekends excluded &middot; Mar 26 day 10 = Mar 13 (partial as of refresh date)
+            </div>
+            <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:11,fontWeight:700,color:MUTED,marginRight:4}}>Metric:</span>
+              {[["assets","Assets"],["tasks","Tasks"],["hours","Hours"]].map(([k,l])=><Pill key={k} active={paceView===k} label={l} onClick={()=>setPaceView(k)} color="#0891b2"/>)}
+              <div style={{width:1,height:20,background:BORD,margin:"0 4px"}}/>
+              <span style={{fontSize:11,fontWeight:700,color:MUTED,marginRight:4}}>Chart:</span>
+              <Pill active={paceChart==="daily"} label="Daily" onClick={()=>setPaceChart("daily")} color="#7c3aed"/>
+              <Pill active={paceChart==="cumulative"} label="Cumulative" onClick={()=>setPaceChart("cumulative")} color="#7c3aed"/>
+              <Pill active={paceChart==="source"} label="SFX vs WOMS" onClick={()=>setPaceChart("source")} color="#d97706"/>
+            </div>
+            {paceChart!=="source"&&(
+              <Box title={(paceChart==="daily"?"Daily ":"Cumulative ")+vLabel[paceView]+" — First 10 Working Days (SFX + WOMS Combined)"}>
+                <ResponsiveContainer width="100%" height={300}>
+                  {paceChart==="daily"?(
+                    <BarChart data={paceDailyData} margin={{left:0,right:12}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CARD}/><XAxis dataKey="day" tick={{fontSize:10,fill:MUTED}}/><YAxis tick={{fontSize:10,fill:MUTED}}/>
+                      <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                      {MONTHS_ORDER.map(m=><Bar key={m} dataKey={m} fill={MO_COLORS[m]} name={m} barSize={14} radius={[2,2,0,0]}/>)}
+                    </BarChart>
+                  ):(
+                    <ComposedChart data={paceCumData} margin={{left:0,right:12}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={CARD}/><XAxis dataKey="day" tick={{fontSize:10,fill:MUTED}}/><YAxis tick={{fontSize:10,fill:MUTED}}/>
+                      <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                      {MONTHS_ORDER.map(m=><Line key={m} type="monotone" dataKey={m} stroke={MO_COLORS[m]} strokeWidth={2.5} dot={{r:4,fill:MO_COLORS[m],stroke:BG,strokeWidth:1.5}} name={m}/>)}
+                    </ComposedChart>
+                  )}
+                </ResponsiveContainer>
+              </Box>
+            )}
+            {paceChart==="source"&&(
+              <Box title={"SFX vs WOMS "+vLabel[paceView]+" by Day Position (All Months Combined)"}>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={paceSourceData} margin={{left:0,right:12}}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={CARD}/><XAxis dataKey="day" tick={{fontSize:10,fill:MUTED}}/><YAxis tick={{fontSize:10,fill:MUTED}}/>
+                    <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:10,color:MUTED}}/>
+                    <Bar dataKey="SFX" stackId="a" fill={SFX_C} name="SFX Creative" barSize={30}/>
+                    <Bar dataKey="WOMS" stackId="a" fill={WOMS_C} name="WOMS" barSize={30} radius={[4,4,0,0]}/>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            )}
+            <div style={{height:10}}/>
+            <Box title="10-day totals — SFX + WOMS combined vs full month">
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>{["Month","SFX Assets","WOMS Assets","Combined Assets","SFX Tasks","WOMS Tasks","Total Tasks","Total Hours","Full Mo Assets","% of Month"].map(h=><th key={h} style={thS(h.includes("Combined")||h.includes("%"),h==="Month")}>{h}</th>)}</tr></thead>
+                  <tbody>{paceSummary.map((r,i)=>(
+                    <tr key={r.m} style={rowBg(i)}>
+                      <td style={{...tdS({l:true,b:true}),color:MO_COLORS[r.m]}}>{r.m}</td>
+                      <td style={tdS({c:"#67e8f9"})}>{r.sfxA.toLocaleString()}</td><td style={tdS({c:"#fda4af"})}>{r.womsA.toLocaleString()}</td>
+                      <td style={tdS({b:true,c:"#34d399"})}>{r.totA.toLocaleString()}</td><td style={tdS({c:SFX_C})}>{r.sfxT.toLocaleString()}</td>
+                      <td style={tdS({c:WOMS_C})}>{r.womsT.toLocaleString()}</td><td style={tdS({b:true,c:TEXT})}>{r.totT.toLocaleString()}</td>
+                      <td style={tdS({c:MUTED})}>{r.totH}</td><td style={tdS({c:"#94a3b8"})}>{r.fullA.toLocaleString()}</td>
+                      <td style={tdS({b:true,c:r.pct>=80?"#4ade80":r.pct>=50?"#facc15":"#f87171"})}>{r.pct!=null?r.pct+"%":"—"}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </Box>
+            <div style={{height:10}}/>
+            <Box title="Daily asset detail — first 10 working days (SFX + WOMS combined)">
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>
+                    {["Day","Oct 25","Nov 25","Dec 25","Jan 26","Feb 26","Mar 26*"].map(h=>(
+                      <th key={h} style={{...thS(false,h==="Day"),color:MO_COLORS[h]||MUTED,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>{Array.from({length:10},(_,i)=>{
+                    const vals=MONTHS_ORDER.map(m=>{const s=SFX_D10[m]&&SFX_D10[m][i]?SFX_D10[m][i].a:0;const w=WOMS_D10[m]&&WOMS_D10[m][i]?WOMS_D10[m][i].a:0;return s+w>0?s+w:null;});
+                    const maxVal=Math.max(...vals.filter(v=>v!=null));
+                    return(<tr key={i} style={rowBg(i)}>
+                      <td style={tdS({l:true,b:true,c:"#94a3b8"})}>Day {i+1}</td>
+                      {vals.map((v,j)=>(
+                        <td key={j} style={tdS({b:v===maxVal,c:v===maxVal?"#34d399":"#cbd5e1"})}>
+                          {v!=null?(<span>{v.toLocaleString()}<span style={{fontSize:9,color:MUTED,marginLeft:3}}>({SFX_D10[MONTHS_ORDER[j]]&&SFX_D10[MONTHS_ORDER[j]][i]?SFX_D10[MONTHS_ORDER[j]][i].a:0}+{WOMS_D10[MONTHS_ORDER[j]]&&WOMS_D10[MONTHS_ORDER[j]][i]?WOMS_D10[MONTHS_ORDER[j]][i].a:0})</span></span>):"-"}
+                        </td>
+                      ))}
+                    </tr>);
+                  })}</tbody>
+                </table>
+              </div>
+            </Box>
+          </div>
+        )}
+
+        {/* ── HOURS UTILIZATION ── */}
+        {tab==="bandwidth"&&(
+          <div>
+            {/* Controls */}
+            <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:11,fontWeight:700,color:MUTED,marginRight:4}}>Month:</span>
+              {MONTHS_ORDER.map(m=><Pill key={m} active={bwMonth===m} label={m} onClick={()=>setBwMonth(m)} color={MO_COLORS[m]}/>)}
+              <div style={{width:1,height:20,background:BORD,margin:"0 4px"}}/>
+              <span style={{fontSize:11,fontWeight:700,color:MUTED,marginRight:4}}>Sort:</span>
+              <Pill active={bwSort==="util"} label="Utilization" onClick={()=>setBwSort("util")} color="#94a3b8"/>
+              <Pill active={bwSort==="sfx"} label="SFX hours" onClick={()=>setBwSort("sfx")} color={SFX_C}/>
+              <Pill active={bwSort==="woms"} label="WOMS hours" onClick={()=>setBwSort("woms")} color={WOMS_C}/>
+              <Pill active={bwSort==="name"} label="Name" onClick={()=>setBwSort("name")} color="#94a3b8"/>
+            </div>
+
+            {/* Team summary stats */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,marginBottom:12}}>
+              <Stat label="Designers" value={bwData.length} sub={bwMonth} color="#0c4a6e"/>
+              <Stat label="Capacity" value={n(bwTotCapacity)+"h"} sub={bwBizDays+" biz days × 8h × "+bwData.length} color="#334155"/>
+              <Stat label="SFX Hours" value={n(Math.round(bwTotSfx))} color={SFX_C}/>
+              <Stat label="WOMS Hours" value={n(Math.round(bwTotWoms))} color={WOMS_C}/>
+              <Stat label="Total Worked" value={n(Math.round(bwTotWorked))+"h"} color="#059669"/>
+              <Stat label="Team Utilization" value={bwTeamUtil+"%"} sub={n(Math.round(bwTotWorked))+"h / "+n(bwTotCapacity)+"h"} color={bwTeamUtil>=75?"#4ade80":bwTeamUtil>=40?"#facc15":"#f87171"}/>
+            </div>
+
+            {/* Legend */}
+            <div style={{display:"flex",gap:16,marginBottom:12,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:MUTED}}>
+                <div style={{width:16,height:10,borderRadius:2,background:SFX_C}}/>SFX hours
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:MUTED}}>
+                <div style={{width:16,height:10,borderRadius:2,background:WOMS_C}}/>WOMS hours
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:MUTED}}>
+                <div style={{width:16,height:10,borderRadius:2,background:"#1e3a5f",border:"1px solid #334155"}}/>Available capacity ({bwBizDays} days × 8h = {bwCapacity}h)
+              </div>
+            </div>
+
+            {/* Utilization bars */}
+            <div style={{background:CARD,borderRadius:10,padding:"16px 20px",marginBottom:12}}>
+              <div style={{fontSize:12,fontWeight:700,color:TEXT,marginBottom:16}}>{bwMonth} — Designer Hours vs Capacity ({bwBizDays} business days)</div>
+              {bwData.map((d,i)=>{
+                const sfxW=Math.min(d.sfxPct,100);
+                const womsW=Math.min(d.womsPct,100-sfxW);
+                const overCap=d.totH>d.capacity;
+                return(
+                  <div key={d.name} style={{marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:4}}>
+                      <span style={{fontSize:12,fontWeight:500,color:TEXT,minWidth:160}}>{d.name}</span>
+                      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                        <span style={{fontSize:10,color:"#67e8f9"}}>{d.sfxH}h SFX</span>
+                        <span style={{fontSize:10,color:"#fda4af"}}>{d.womsH}h WOMS</span>
+                        <span style={{fontSize:11,fontWeight:700,color:overCap?"#f87171":d.util>=75?"#4ade80":d.util>=40?"#facc15":"#94a3b8",minWidth:38,textAlign:"right"}}>{d.util}%</span>
+                        <span style={{fontSize:10,color:MUTED,minWidth:70,textAlign:"right"}}>{d.totH}h / {d.capacity}h</span>
+                      </div>
+                    </div>
+                    {/* The bar track */}
+                    <div style={{width:"100%",height:14,background:"#0f2744",borderRadius:7,overflow:"hidden",position:"relative",border:"1px solid #1e3a5f"}}>
+                      {/* SFX portion */}
+                      {sfxW>0&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:sfxW+"%",background:SFX_C,borderRadius:sfxW+womsW>=99?"7px":"7px 0 0 7px"}}/>}
+                      {/* WOMS portion */}
+                      {womsW>0&&<div style={{position:"absolute",left:sfxW+"%",top:0,bottom:0,width:womsW+"%",background:WOMS_C,borderRadius:sfxW+womsW>=99?"0 7px 7px 0":womsW>0&&sfxW===0?"7px 0 0 7px":"0"}}/>}
+                      {/* Over-capacity marker */}
+                      {overCap&&<div style={{position:"absolute",right:0,top:0,bottom:0,width:3,background:"#f87171"}}/>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Summary table */}
+            <Box title={"Utilization detail — "+bwMonth}>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>
+                    {["Designer","SFX Hours","WOMS Hours","Total Hours","Capacity","Utilization","Remaining"].map(h=>(
+                      <th key={h} style={thS(h==="Utilization",h==="Designer")}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>{bwData.map((d,i)=>{
+                    const remaining=Math.max(0,d.capacity-d.totH);
+                    return(
+                      <tr key={d.name} style={rowBg(i)}>
+                        <td style={tdS({l:true,b:true,c:TEXT})}>{d.name}</td>
+                        <td style={tdS({c:"#67e8f9",m:true})}>{d.sfxH}</td>
+                        <td style={tdS({c:"#fda4af",m:true})}>{d.womsH}</td>
+                        <td style={tdS({b:true,c:TEXT})}>{d.totH}</td>
+                        <td style={tdS({c:MUTED})}>{d.capacity}h</td>
+                        <td style={tdS({b:true,c:d.util>=75?"#4ade80":d.util>=40?"#facc15":"#f87171"})}>{d.util}%</td>
+                        <td style={tdS({c:MUTED})}>{remaining>0?remaining+"h":"—"}</td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            </Box>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      React.createElement(Dashboard)
+    );
+  </script>
+</body>
+</html>
